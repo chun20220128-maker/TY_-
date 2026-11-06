@@ -48,6 +48,7 @@ jobs:
             if(!(Test-Path $path)){throw 'Shortcut missing'}
             $link=$shell.CreateShortcut($path)
             $icon=$link.IconLocation -replace '"','' -replace ',\s*',','
+            Write-Host ("Shortcut={0}; Target={1}; Icon={2}; Expected={3}" -f $path,$link.TargetPath,$link.IconLocation,"$root\鑽探工作台.exe")
             if($link.TargetPath -ne "$root\鑽探工作台.exe" -or $icon -notlike '*鑽探工作台.exe,0'){throw 'Shortcut icon or target mismatch'}
           }
           function Open-Workbench {
