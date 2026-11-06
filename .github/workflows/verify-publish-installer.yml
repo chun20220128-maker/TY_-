@@ -1,0 +1,122 @@
+name: Verify and publish full drilling installer
+on:
+  push:
+    branches: [release/verify-drilling-windows-1.0.2]
+permissions:
+  contents: write
+jobs:
+  windows-check:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, windows-2025]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - name: Obtain existing installer and verify fixed SHA256
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $base='https://github.com/chun20220128-maker/TY_-/releases/download/drilling-desktop-v1.0.2/'
+          $meta=Invoke-RestMethod ($base+'Installer_Download_Manifest.json')
+          $expected='c994a0f42cf2cce5882202ca7f8e84575b7b284729aeaca12786abe8f4f0e952'
+          if($meta.sha256 -ne $expected){throw 'Unexpected installer manifest'}
+          $out=Join-Path $env:RUNNER_TEMP 'DrillingWorkbench_Setup_1.0.2_x64.exe'
+          $stream=[IO.File]::Create($out)
+          try{
+            foreach($part in $meta.parts){
+              $file=Join-Path $env:RUNNER_TEMP $part.name
+              Invoke-WebRequest ($base+$part.name) -OutFile $file
+              if((Get-Item $file).Length -ne $part.size -or (Get-FileHash $file -Algorithm SHA256).Hash.ToLower() -ne $part.sha256){throw 'Part checksum mismatch'}
+              $bytes=[IO.File]::ReadAllBytes($file);$stream.Write($bytes,0,$bytes.Length)
+            }
+          }finally{$stream.Dispose()}
+          if((Get-FileHash $out -Algorithm SHA256).Hash.ToLower() -ne $expected){throw 'Installer checksum mismatch'}
+          "SETUP=$out" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Native installation, startup, persistence, upgrade and uninstall
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $root=Join-Path $env:RUNNER_TEMP '鑽探工作台 測試'
+          $process=Start-Process -FilePath $env:SETUP -ArgumentList "/S /D=$root" -Wait -PassThru
+          if($process.ExitCode -ne 0){throw 'Installation failed'}
+          if(!(Test-Path "$root\鑽探工作台.exe")){throw 'Launcher missing'}
+          $desktop=[Environment]::GetFolderPath('Desktop')
+          $menu=Join-Path ([Environment]::GetFolderPath('Programs')) '鑽探工作台'
+          $shell=New-Object -ComObject WScript.Shell
+          foreach($path in @("$desktop\鑽探工作台.lnk","$menu\鑽探工作台.lnk")){
+            if(!(Test-Path $path)){throw 'Shortcut missing'}
+            $link=$shell.CreateShortcut($path)
+            $icon=$link.IconLocation -replace '"','' -replace ',\s*',','
+            if($link.TargetPath -ne "$root\鑽探工作台.exe" -or $icon -notlike '*鑽探工作台.exe,0'){throw 'Shortcut icon or target mismatch'}
+          }
+          function Open-Workbench {
+            Remove-Item "$root\data\desktop-instance.json" -Force -ErrorAction SilentlyContinue
+            Start-Process -FilePath "$root\鑽探工作台.exe"
+            for($i=0;$i -lt 90;$i++){
+              Start-Sleep 1
+              if(Test-Path "$root\data\desktop-instance.json"){
+                $instance=Get-Content "$root\data\desktop-instance.json" -Raw -Encoding utf8|ConvertFrom-Json
+                $url="http://127.0.0.1:$($instance.port)"
+                try{$info=Invoke-RestMethod "$url/api/desktop-info";if($info.app -eq 'drilling-workbench-windows-v1'){return $url}}catch{}
+              }
+            }
+            if(Test-Path "$root\data\desktop.log"){Get-Content "$root\data\desktop.log" -Tail 60 -Encoding utf8}
+            throw 'Native launcher or UTF8 startup failed'
+          }
+          function Close-Workbench($url){
+            Invoke-RestMethod "$url/api/desktop-stop" -Method Post|Out-Null
+            Start-Sleep 3
+            Get-CimInstance Win32_Process|Where-Object {$_.ExecutablePath -and $_.ExecutablePath.StartsWith("$root\browser\")}|ForEach-Object {Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue}
+            Start-Sleep 2
+          }
+          $url=Open-Workbench
+          $history=Invoke-RestMethod "$url/api/history"
+          if($history.records.Count -ne 322 -or $history.projectCount -ne 14){throw 'Bundled history incomplete'}
+          $domFile=Join-Path $env:RUNNER_TEMP 'workbench-dom.txt'
+          & "$root\browser\chrome.exe" --headless=new --no-sandbox --disable-gpu --no-first-run --disable-background-networking "--user-data-dir=$env:RUNNER_TEMP\browser-native-test" --dump-dom --timeout=20000 --virtual-time-budget=10000 $url 2>$null | Out-File $domFile -Encoding utf8
+          $dom=Get-Content $domFile -Raw -Encoding utf8
+          if($dom -notmatch 'id="projectName"' -or $dom -notmatch 'id="settle"'){throw 'Bundled browser cannot render workbench'}
+          $state=(Invoke-RestMethod "$url/api/project").project
+          if(!$state){throw 'Project disk state absent after rendering'}
+          $state.project.name='繁中工程師安裝測試'
+          $body=[Text.Encoding]::UTF8.GetBytes(($state|ConvertTo-Json -Depth 100 -Compress))
+          Invoke-RestMethod "$url/api/project" -Method Post -ContentType 'application/json; charset=utf-8' -Body $body|Out-Null
+          Close-Workbench $url
+          $url=Open-Workbench
+          if((Invoke-RestMethod "$url/api/project").project.project.name -ne '繁中工程師安裝測試'){throw 'Project not preserved on restart'}
+          if((Invoke-RestMethod "$url/api/history").records.Count -ne 322){throw 'History lost on restart'}
+          Close-Workbench $url
+          $before=(Get-FileHash "$root\data\current-project.json" -Algorithm SHA256).Hash
+          $process=Start-Process -FilePath $env:SETUP -ArgumentList "/S /D=$root" -Wait -PassThru
+          if($process.ExitCode -ne 0 -or (Get-FileHash "$root\data\current-project.json" -Algorithm SHA256).Hash -ne $before){throw 'Upgrade changed project data'}
+          $process=Start-Process -FilePath "$root\解除安裝.exe" -ArgumentList '/S' -Wait -PassThru
+          if($process.ExitCode -ne 0){throw 'Uninstall failed'}
+          Start-Sleep 3
+          if(!(Test-Path "$root\data\history.sqlite3") -or !(Test-Path "$root\data\current-project.json")){throw 'Uninstall removed user data'}
+          if(Test-Path "$root\鑽探工作台.exe"){throw 'Uninstall left program installed'}
+          'PASS native Windows installation, shortcuts, bundled browser, UTF8 startup, disk state, restart, upgrade and retained uninstall data'
+  publish-full-installer:
+    needs: windows-check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Obtain and verify the same installer
+        shell: python
+        run: |
+          import urllib.request,json,hashlib
+          from pathlib import Path
+          base='https://github.com/chun20220128-maker/TY_-/releases/download/drilling-desktop-v1.0.2/'
+          m=json.load(urllib.request.urlopen(base+'Installer_Download_Manifest.json'))
+          expected='c994a0f42cf2cce5882202ca7f8e84575b7b284729aeaca12786abe8f4f0e952'
+          assert m['sha256']==expected
+          with Path(m['installer']).open('wb') as out:
+            for part in m['parts']:
+              data=urllib.request.urlopen(base+part['name']).read()
+              assert len(data)==part['size'] and hashlib.sha256(data).hexdigest()==part['sha256']
+              out.write(data)
+          assert hashlib.sha256(Path(m['installer']).read_bytes()).hexdigest()==expected
+      - name: Publish full Setup.exe after both Windows checks pass
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload drilling-desktop-v1.0.2 DrillingWorkbench_Setup_1.0.2_x64.exe --repo "$GITHUB_REPOSITORY" --clobber
