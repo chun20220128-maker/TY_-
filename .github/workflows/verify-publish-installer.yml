@@ -1,43 +1,96 @@
-name: Verify and publish full drilling installer
+name: Build, verify and publish complete Windows installer
 on:
   push:
     branches: [release/verify-drilling-windows-1.0.2]
 permissions:
   contents: write
 jobs:
-  windows-check:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [windows-2022, windows-2025]
-    runs-on: ${{ matrix.os }}
+  build-installer:
+    runs-on: windows-2022
     timeout-minutes: 30
     steps:
-      - name: Obtain existing installer and verify fixed SHA256
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Build native installer with unmodified data and native shortcuts
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
           $base='https://github.com/chun20220128-maker/TY_-/releases/download/drilling-desktop-v1.0.2/'
           $meta=Invoke-RestMethod ($base+'Installer_Download_Manifest.json')
           $expected='c994a0f42cf2cce5882202ca7f8e84575b7b284729aeaca12786abe8f4f0e952'
-          if($meta.sha256 -ne $expected){throw 'Unexpected installer manifest'}
-          $out=Join-Path $env:RUNNER_TEMP 'DrillingWorkbench_Setup_1.0.2_x64.exe'
-          $stream=[IO.File]::Create($out)
+          if($meta.sha256 -ne $expected){throw 'Unexpected input installer manifest'}
+          $inputSetup=Join-Path $env:RUNNER_TEMP 'input-installer.exe'
+          $stream=[IO.File]::Create($inputSetup)
           try{
-            foreach($part in $meta.parts){
-              $file=Join-Path $env:RUNNER_TEMP $part.name
-              Invoke-WebRequest ($base+$part.name) -OutFile $file
-              if((Get-Item $file).Length -ne $part.size -or (Get-FileHash $file -Algorithm SHA256).Hash.ToLower() -ne $part.sha256){throw 'Part checksum mismatch'}
-              $bytes=[IO.File]::ReadAllBytes($file);$stream.Write($bytes,0,$bytes.Length)
-            }
+           foreach($part in $meta.parts){
+            $file=Join-Path $env:RUNNER_TEMP $part.name
+            Invoke-WebRequest ($base+$part.name) -OutFile $file
+            if((Get-Item $file).Length -ne $part.size -or (Get-FileHash $file -Algorithm SHA256).Hash.ToLower() -ne $part.sha256){throw 'Input part checksum mismatch'}
+            $bytes=[IO.File]::ReadAllBytes($file);$stream.Write($bytes,0,$bytes.Length)
+           }
           }finally{$stream.Dispose()}
-          if((Get-FileHash $out -Algorithm SHA256).Hash.ToLower() -ne $expected){throw 'Installer checksum mismatch'}
-          "SETUP=$out" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          if((Get-FileHash $inputSetup -Algorithm SHA256).Hash.ToLower() -ne $expected){throw 'Input installer mismatch'}
+          $stage=Join-Path $env:RUNNER_TEMP 'payload'
+          & "$env:ProgramFiles\7-Zip\7z.exe" x -y $inputSetup "-o$stage" | Out-Null
+          if($LASTEXITCODE -ne 0){throw 'Cannot extract input installer'}
+          $manifest=Get-Content "$stage\release-manifest.json" -Raw -Encoding utf8|ConvertFrom-Json -AsHashtable
+          foreach($name in $manifest.files.Keys){
+           if((Get-FileHash (Join-Path $stage $name) -Algorithm SHA256).Hash.ToLower() -ne $manifest.files[$name]){throw "Input payload mismatch: $name"}
+          }
+          $repo=$env:GITHUB_WORKSPACE
+          $source=Join-Path $repo 'release-tools'
+          $build=Join-Path $env:RUNNER_TEMP 'native-build';New-Item $build -ItemType Directory|Out-Null
+          $vs=& "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if(!$vs){throw 'MSVC toolchain missing'}
+          $vcvars=Join-Path $vs 'VC\Auxiliary\Build\vcvars64.bat'
+          $command='"'+$vcvars+'" && rc /nologo /c 65001 /fo "'+$build+'\launcher.res" "'+$source+'\launcher.rc" && cl /nologo /utf-8 /O2 /MT /Fe:"'+$stage+'\鑽探工作台.exe" /Fo"'+$build+'\launcher.obj" "'+$source+'\launcher.c" "'+$build+'\launcher.res" /link /SUBSYSTEM:WINDOWS /INCREMENTAL:NO shell32.lib user32.lib'
+          Push-Location $stage
+          try{& $env:ComSpec /d /s /c $command;if($LASTEXITCODE -ne 0){throw 'Native launcher build failed'}}finally{Pop-Location}
+          $guide=Get-Content "$stage\使用說明.txt" -Raw -Encoding utf8
+          [IO.File]::WriteAllText("$stage\使用說明.txt",($guide -replace '1.0.2','1.0.3'),[Text.UTF8Encoding]::new($true))
+          $manifest.release='Windows-offline-installer-v1.0.3'
+          $manifest.shortcutBranding='native NSIS shortcuts; post-install property mutation removed'
+          foreach($name in @($manifest.files.Keys)){$manifest.files[$name]=(Get-FileHash (Join-Path $stage $name) -Algorithm SHA256).Hash.ToLower()}
+          [IO.File]::WriteAllText("$stage\release-manifest.json",($manifest|ConvertTo-Json -Depth 20),[Text.UTF8Encoding]::new($false))
+          $makensis="${env:ProgramFiles(x86)}\NSIS\makensis.exe"
+          if(!(Test-Path $makensis)){choco install nsis --yes --no-progress --limit-output;if($LASTEXITCODE -ne 0){throw 'NSIS install failed'}}
+          $out=Join-Path $repo 'output';New-Item $out -ItemType Directory|Out-Null
+          $setup=Join-Path $out 'DrillingWorkbench_Setup_1.0.3_x64.exe'
+          & $makensis /V3 "/DSTAGE=$stage" "/DOUTPUT=$setup" "$source\installer.nsi"
+          if($LASTEXITCODE -ne 0 -or !(Test-Path $setup)){throw 'Installer compilation failed'}
+          $sha=(Get-FileHash $setup -Algorithm SHA256).Hash.ToLower()
+          "$sha  DrillingWorkbench_Setup_1.0.3_x64.exe" | Out-File "$out\SHA256SUMS.txt" -Encoding utf8
+          @{version='1.0.3';sha256=$sha;bytes=(Get-Item $setup).Length;inputInstallerSHA256=$expected;historyProjects=14;historyPrices=322;build='Native Windows MSVC and NSIS';shortcutFix='Removed post-install shortcut mutation'} | ConvertTo-Json | Out-File "$out\Build_Report.json" -Encoding utf8
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: installer-candidate-1.0.3
+          path: output/*
+          retention-days: 7
+  windows-check:
+    needs: build-installer
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, windows-2025]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: installer-candidate-1.0.3
+          path: candidate
+      - name: Verify candidate checksum
+        shell: pwsh
+        run: |
+          $setup=Join-Path $env:GITHUB_WORKSPACE 'candidate/DrillingWorkbench_Setup_1.0.3_x64.exe'
+          $meta=Get-Content 'candidate/Build_Report.json' -Raw -Encoding utf8|ConvertFrom-Json
+          if((Get-FileHash $setup -Algorithm SHA256).Hash.ToLower() -ne $meta.sha256){throw 'Candidate checksum mismatch'}
+          "SETUP=$setup" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
       - name: Native installation, startup, persistence, upgrade and uninstall
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
           $root=Join-Path $env:RUNNER_TEMP '鑽探工作台 測試'
+          Write-Host 'CHECK installing candidate'
           $process=Start-Process -FilePath $env:SETUP -ArgumentList "/S /D=$root" -Wait -PassThru
           if($process.ExitCode -ne 0){throw 'Installation failed'}
           if(!(Test-Path "$root\鑽探工作台.exe")){throw 'Launcher missing'}
@@ -71,9 +124,11 @@ jobs:
             Get-CimInstance Win32_Process|Where-Object {$_.ExecutablePath -and $_.ExecutablePath.StartsWith("$root\browser\")}|ForEach-Object {Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue}
             Start-Sleep 2
           }
+          Write-Host 'CHECK native startup'
           $url=Open-Workbench
           $history=Invoke-RestMethod "$url/api/history"
           if($history.records.Count -ne 322 -or $history.projectCount -ne 14){throw 'Bundled history incomplete'}
+          Write-Host 'CHECK bundled browser render'
           $domFile=Join-Path $env:RUNNER_TEMP 'workbench-dom.txt'
           & "$root\browser\chrome.exe" --headless=new --no-sandbox --disable-gpu --no-first-run --disable-background-networking "--user-data-dir=$env:RUNNER_TEMP\browser-native-test" --dump-dom --timeout=20000 --virtual-time-budget=10000 $url 2>$null | Out-File $domFile -Encoding utf8
           $dom=Get-Content $domFile -Raw -Encoding utf8
@@ -98,26 +153,26 @@ jobs:
           if(Test-Path "$root\鑽探工作台.exe"){throw 'Uninstall left program installed'}
           'PASS native Windows installation, shortcuts, bundled browser, UTF8 startup, disk state, restart, upgrade and retained uninstall data'
   publish-full-installer:
-    needs: windows-check
+    needs: [build-installer, windows-check]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Obtain and verify the same installer
-        shell: python
-        run: |
-          import urllib.request,json,hashlib
-          from pathlib import Path
-          base='https://github.com/chun20220128-maker/TY_-/releases/download/drilling-desktop-v1.0.2/'
-          m=json.load(urllib.request.urlopen(base+'Installer_Download_Manifest.json'))
-          expected='c994a0f42cf2cce5882202ca7f8e84575b7b284729aeaca12786abe8f4f0e952'
-          assert m['sha256']==expected
-          with Path(m['installer']).open('wb') as out:
-            for part in m['parts']:
-              data=urllib.request.urlopen(base+part['name']).read()
-              assert len(data)==part['size'] and hashlib.sha256(data).hexdigest()==part['sha256']
-              out.write(data)
-          assert hashlib.sha256(Path(m['installer']).read_bytes()).hexdigest()==expected
-      - name: Publish full Setup.exe after both Windows checks pass
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: installer-candidate-1.0.3
+          path: candidate
+      - name: Publish only after both Windows validations pass
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload drilling-desktop-v1.0.2 DrillingWorkbench_Setup_1.0.2_x64.exe --repo "$GITHUB_REPOSITORY" --clobber
+        run: |
+          cat > release-notes.md <<'NOTES'
+          # 鑽探工作台 Windows 單機版 1.0.3
+          完整離線安裝檔，可直接下載 Setup.exe，不需下載工具或分段合併。
+          修正 UTF-8／CP950 啟動編碼問題，並改用原生安裝捷徑，保留藍色勾選板與鑽頭圖示。
+          內含全部執行與視窗元件，及 14 案／322 筆歷史契約單價。新資料儲存於安裝資料夾，不使用雲端儲存。
+          升級保留既有資料；解除安裝保留 data 與 exports。
+          本檔已在 Windows Server 2022 與 2025 的 GitHub runner 通過原生安裝、啟動、內建瀏覽器、繁中專案儲存、重新開啟、升級及解除安裝保留資料測試。
+          這些不是 Windows 10／11 桌面實機；公司端的防毒與權限政策仍需由各單位確認。
+          NOTES
+          gh release create drilling-desktop-v1.0.3 --repo "$GITHUB_REPOSITORY" --draft --title "鑽探工作台 Windows 1.0.3 完整離線安裝版" --notes-file release-notes.md candidate/*
+          gh release edit drilling-desktop-v1.0.3 --repo "$GITHUB_REPOSITORY" --draft=false --latest
