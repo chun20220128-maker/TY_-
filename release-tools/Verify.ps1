@@ -7,7 +7,7 @@ $root=Join-Path $env:RUNNER_TEMP '鑽探工作台 離線測試'
 Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled True
 if(@(Get-NetFirewallProfile|Where-Object {!$_.Enabled}).Count){throw 'Firewall not enabled'}
 $paths=@($setup,"$root\runtime\python.exe","$root\runtime\pythonw.exe","$root\browser\chrome.exe")
-foreach($program in $paths){New-NetFirewallRule -DisplayName ('Workbench offline '+[guid]::NewGuid()) -Direction Outbound -Action Block -RemoteAddress Internet -Program $program -Profile Any|Out-Null}
+foreach($program in $paths){New-NetFirewallRule -DisplayName ('Workbench offline '+[guid]::NewGuid()) -Direction Outbound -Action Block -RemoteAddress @("0.0.0.0-126.255.255.255","128.0.0.0-255.255.255.255","::/0") -Program $program -Profile Any|Out-Null}
 $process=Start-Process -FilePath $setup -ArgumentList "/S /D=$root" -Wait -PassThru
 if($process.ExitCode -ne 0){throw 'Offline installation failed'}
 $networkProbe="import socket;blocked=False
@@ -37,7 +37,11 @@ function Open-Workbench {
    try{if((Invoke-RestMethod "$url/api/desktop-info").app -eq 'drilling-workbench-windows-v1' -and (Probe 'info').trayWindow -and (Probe 'info').trayRectResult -eq 0){return $url}}catch{}
   }
  }
- if(Test-Path "$root\data\desktop.log"){Get-Content "$root\data\desktop.log" -Tail 80 -Encoding utf8};throw 'Native startup or notification icon failed'
+ if(Test-Path "$root\data\desktop.log"){Get-Content "$root\data\desktop.log" -Tail 80 -Encoding utf8}
+ if(Test-Path "$root\data\desktop-instance.json"){Get-Content "$root\data\desktop-instance.json" -Raw -Encoding utf8}
+ Probe 'info'|ConvertTo-Json -Depth 10|Write-Host
+ Get-CimInstance Win32_Process|Where-Object {$_.ExecutablePath -and $_.ExecutablePath.StartsWith($root)}|Select-Object Name,ProcessId,CommandLine|Format-Table
+ throw 'Native startup or notification icon failed' 
 }
 function Wait-Closed {
  for($i=0;$i -lt 30;$i++){
