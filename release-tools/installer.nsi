@@ -21,22 +21,22 @@ SetCompressorDictSize 32
 CRCCheck force
 ShowInstDetails show
 ShowUninstDetails show
-VIProductVersion "1.0.3.0"
+VIProductVersion "1.0.4.0"
 VIAddVersionKey /LANG=1028 "ProductName" "鑽探工作台 Windows 單機版"
 VIAddVersionKey /LANG=1028 "FileDescription" "鑽探工作台完整離線安裝程式"
-VIAddVersionKey /LANG=1028 "FileVersion" "1.0.3.0"
-VIAddVersionKey /LANG=1028 "ProductVersion" "1.0.3"
+VIAddVersionKey /LANG=1028 "FileVersion" "1.0.4.0"
+VIAddVersionKey /LANG=1028 "ProductVersion" "1.0.4"
 VIAddVersionKey /LANG=1028 "LegalCopyright" "鑽探工作台"
 !define MUI_ABORTWARNING
 !define MUI_WELCOMEPAGE_TITLE "鑽探工作台 Windows 單機版"
-!define MUI_WELCOMEPAGE_TEXT "本程式包含規劃、估價、契約、請款及歷史契約單價。$\r$\n$\r$\n安裝程式已內含必要的執行與視窗元件，安裝及使用都不需要網路，不需要另外安裝 Python 或瀏覽器。$\r$\n$\r$\n資料儲存在安裝資料夾的 data 目錄中。升級及解除安裝都會保留此目錄。$\r$\n$\r$\n若工作台已開啟，請先按左側「關閉單機程式」並關閉工作台視窗。"
+!define MUI_WELCOMEPAGE_TEXT "本程式包含規劃、估價、契約、請款及歷史契約單價。$\r$\n$\r$\n安裝程式已內含必要的執行與視窗元件，安裝及使用都不需要網路，不需要另外安裝 Python 或瀏覽器。$\r$\n$\r$\n資料儲存在安裝資料夾的 data 目錄中。升級及解除安裝都會保留此目錄。$\r$\n$\r$\n若工作台已開啟，請先按左側「結束程式」並關閉工作台視窗。"
 !insertmacro MUI_PAGE_WELCOME
-!define MUI_DIRECTORYPAGE_TEXT_TOP "請選擇您可以寫入的資料夾。建議保留預設位置，勿選擇需要系統管理員權限的 Program Files。歷史單價與專案資料保存在安裝位置的 data 資料夾。"
+!define MUI_DIRECTORYPAGE_TEXT_TOP "請選擇您可以寫入的資料夾。建議保留預設位置，勿選擇需要系統管理員權限的 Program Files。歷史單價保存在安裝位置的 data 資料夾；專案作業請自行匯出備份。"
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
 !define MUI_FINISHPAGE_RUN "$INSTDIR\鑽探工作台.exe"
 !define MUI_FINISHPAGE_RUN_TEXT "啟動鑽探工作台"
-!define MUI_FINISHPAGE_TEXT "鑽探工作台已安裝完成。$\r$\n$\r$\n可從桌面或開始功能表啟動，不需要網路。所有作業及歷史契約單價儲存在本機 data 資料夾。$\r$\n$\r$\n日後請定期將整個 data 資料夾備份到其他磁碟。"
+!define MUI_FINISHPAGE_TEXT "鑽探工作台已安裝完成。$\r$\n$\r$\n可從桌面或開始功能表啟動，不需要網路。歷史契約單價自動保存在本機。專案作業須自行匯出備份，結束後不保留。$\r$\n$\r$\n日後請定期將整個 data 資料夾備份到其他磁碟。"
 !insertmacro MUI_PAGE_FINISH
 !insertmacro MUI_UNPAGE_CONFIRM
 !insertmacro MUI_UNPAGE_INSTFILES
@@ -74,7 +74,7 @@ Function ${PREFIX}CheckClosed
  FileClose $0
  Goto check_done
  running:
- MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "工作台仍在執行，或資料夾無寫入權限。請先按工作台左側「關閉單機程式」、關閉工作台視窗，再按「重試」。" IDRETRY retry_check
+ MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "工作台仍在執行，或資料夾無寫入權限。請先按工作台左側「結束程式」、關閉工作台視窗，再按「重試」。" IDRETRY retry_check
  Abort
  check_done:
 FunctionEnd
@@ -121,7 +121,7 @@ Section "鑽探工作台（完整離線版）"
  CreateShortcut "$DESKTOP\鑽探工作台.lnk" "$INSTDIR\鑽探工作台.exe" "" "$INSTDIR\鑽探工作台.exe" 0 SW_SHOWNORMAL "" "鑽探工作台（離線單機版）"
  WriteRegStr HKCU "Software\DrillingWorkbench" "InstallDir" "$INSTDIR"
  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\DrillingWorkbench" "DisplayName" "鑽探工作台 Windows 單機版"
- WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\DrillingWorkbench" "DisplayVersion" "1.0.3"
+ WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\DrillingWorkbench" "DisplayVersion" "1.0.4"
  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\DrillingWorkbench" "InstallLocation" "$INSTDIR"
  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\DrillingWorkbench" "DisplayIcon" '"$INSTDIR\鑽探工作台.exe",0' 
  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\DrillingWorkbench" "UninstallString" '"$INSTDIR\解除安裝.exe"'
