@@ -20,7 +20,7 @@ s.Shell_NotifyIconGetRect.argtypes=[ctypes.POINTER(Identifier),ctypes.POINTER(w.
 try:
  tray.start();handle=tray.hwnd;ident=Identifier();ident.size=ctypes.sizeof(ident);ident.hwnd=handle;ident.id=1;rect=w.RECT()
  for attempt in range(50):
-  if s.Shell_NotifyIconGetRect(ctypes.byref(ident),ctypes.byref(rect))==0:break
+  if s.Shell_NotifyIconGetRect(ctypes.byref(ident),ctypes.byref(rect))>=0:break
   time.sleep(.1)
  else:raise AssertionError('Running tray icon did not become visible')
  u.PostMessageW(handle,0x8001,0,0x203);assert opened.wait(5),'Double-click handler did not run'
@@ -28,7 +28,7 @@ try:
  assert menus==[['開啟鑽探工作台','結束程式']],menus
  tray.close();assert not tray.hwnd
  for attempt in range(50):
-  if s.Shell_NotifyIconGetRect(ctypes.byref(ident),ctypes.byref(rect))!=0:break
+  if s.Shell_NotifyIconGetRect(ctypes.byref(ident),ctypes.byref(rect))<0:break
   time.sleep(.1)
  else:raise AssertionError('Stopped tray icon still registered')
  print(json.dumps({'nativeNotificationIconRegistered':True,'nativeIconRemovedAfterStop':True,'doubleClickEvent':True,'nativeMenuLabels':menus[0],'menuSelectionHandler':True,'physicalMouseInteractionTested':False}))

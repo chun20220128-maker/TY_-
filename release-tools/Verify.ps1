@@ -34,7 +34,7 @@ function Open-Workbench {
   Start-Sleep 1
   if(Test-Path "$root\data\desktop-instance.json"){
    $instance=Get-Content "$root\data\desktop-instance.json" -Raw -Encoding utf8|ConvertFrom-Json;$url="http://127.0.0.1:$($instance.port)"
-   try{if((Invoke-RestMethod "$url/api/desktop-info").app -eq 'drilling-workbench-windows-v1' -and (Probe 'info').trayWindow -and (Probe 'info').trayRectResult -eq 0){return $url}}catch{}
+   try{if((Invoke-RestMethod "$url/api/desktop-info").app -eq 'drilling-workbench-windows-v1' -and (Probe 'info').trayWindow -and (Probe 'info').trayRectResult -ge 0){return $url}}catch{}
   }
  }
  if(Test-Path "$root\data\desktop.log"){Get-Content "$root\data\desktop.log" -Tail 80 -Encoding utf8}
@@ -59,7 +59,7 @@ if($LASTEXITCODE -ne 0){throw 'Native tray registration or event test failed'}
 $url=Open-Workbench
 $history=Invoke-RestMethod "$url/api/history";if($history.records.Count -ne 322 -or $history.projectCount -ne 14){throw 'Bundled 14/322 history missing'}
 $native=Probe 'info';$native|ConvertTo-Json -Depth 10|Out-File "$report\Native_Icon_Verification.json" -Encoding utf8
-if($native.trayRectResult -ne 0){throw 'Windows cannot locate the running notification icon'}
+if($native.trayRectResult -lt 0){throw 'Windows cannot locate the running notification icon'}
 Probe 'close-windows'|Out-Null;Start-Sleep 2
 if(!(Probe 'info').trayWindow){throw 'X removed background icon'}
 node "$source\Test-UI.cjs" $root $url 'full' $report
