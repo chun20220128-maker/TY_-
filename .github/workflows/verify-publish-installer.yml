@@ -1,183 +1,127 @@
 name: Build, verify and publish complete Windows installer
-on:
-  push:
-    branches: [release/verify-drilling-windows-1.0.2]
 permissions:
   contents: write
+  actions: read
 jobs:
   build-installer:
     runs-on: windows-2022
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-      - name: Build native installer with unmodified data and native shortcuts
-        shell: pwsh
-        run: |
-          $ErrorActionPreference='Stop'
-          $base='https://github.com/chun20220128-maker/TY_-/releases/download/drilling-desktop-v1.0.2/'
-          $meta=Invoke-RestMethod ($base+'Installer_Download_Manifest.json')
-          $expected='c994a0f42cf2cce5882202ca7f8e84575b7b284729aeaca12786abe8f4f0e952'
-          if($meta.sha256 -ne $expected){throw 'Unexpected input installer manifest'}
-          $inputSetup=Join-Path $env:RUNNER_TEMP 'input-installer.exe'
-          $stream=[IO.File]::Create($inputSetup)
-          try{
-           foreach($part in $meta.parts){
-            $file=Join-Path $env:RUNNER_TEMP $part.name
-            Invoke-WebRequest ($base+$part.name) -OutFile $file
-            if((Get-Item $file).Length -ne $part.size -or (Get-FileHash $file -Algorithm SHA256).Hash.ToLower() -ne $part.sha256){throw 'Input part checksum mismatch'}
-            $bytes=[IO.File]::ReadAllBytes($file);$stream.Write($bytes,0,$bytes.Length)
-           }
-          }finally{$stream.Dispose()}
-          if((Get-FileHash $inputSetup -Algorithm SHA256).Hash.ToLower() -ne $expected){throw 'Input installer mismatch'}
-          $stage=Join-Path $env:RUNNER_TEMP 'payload'
-          & "$env:ProgramFiles\7-Zip\7z.exe" x -y $inputSetup "-o$stage" | Out-Null
-          if($LASTEXITCODE -ne 0){throw 'Cannot extract input installer'}
-          $manifest=Get-Content "$stage\release-manifest.json" -Raw -Encoding utf8|ConvertFrom-Json -AsHashtable
-          foreach($name in $manifest.files.Keys){
-           if((Get-FileHash (Join-Path $stage $name) -Algorithm SHA256).Hash.ToLower() -ne $manifest.files[$name]){throw "Input payload mismatch: $name"}
-          }
-          $repo=$env:GITHUB_WORKSPACE
-          $source=Join-Path $repo 'release-tools'
-          $build=Join-Path $env:RUNNER_TEMP 'native-build';New-Item $build -ItemType Directory|Out-Null
-          $vs=& "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
-          if(!$vs){throw 'MSVC toolchain missing'}
-          $vcvars=Join-Path $vs 'VC\Auxiliary\Build\vcvars64.bat'
-          $command='"'+$vcvars+'" && rc /nologo /c 65001 /fo "'+$build+'\launcher.res" "'+$source+'\launcher.rc" && cl /nologo /utf-8 /O2 /MT /Fe:"'+$build+'\DrillingWorkbench.exe" /Fo"'+$build+'\launcher.obj" "'+$source+'\launcher.c" "'+$build+'\launcher.res" /link /SUBSYSTEM:WINDOWS /INCREMENTAL:NO shell32.lib user32.lib'
-          Push-Location $stage
-          try{& $env:ComSpec /d /s /c $command;if($LASTEXITCODE -ne 0){throw 'Native launcher build failed'}}finally{Pop-Location}
-          Copy-Item "$build\DrillingWorkbench.exe" "$stage\鑽探工作台.exe" -Force
-          Copy-Item "$build\DrillingWorkbench.exe" "$stage\DrillingWorkbench.exe" -Force
-          $guide=Get-Content "$stage\使用說明.txt" -Raw -Encoding utf8
-          [IO.File]::WriteAllText("$stage\使用說明.txt",($guide -replace '1.0.2','1.0.3'),[Text.UTF8Encoding]::new($true))
-          Copy-Item "$stage\使用說明.txt" "$stage\README.zh-TW.txt" -Force
-          $manifest.release='Windows-offline-installer-v1.0.3'
-          $manifest.shortcutBranding='native NSIS shortcuts; post-install property mutation removed'
-          foreach($name in @($manifest.files.Keys)){$manifest.files[$name]=(Get-FileHash (Join-Path $stage $name) -Algorithm SHA256).Hash.ToLower()}
-          [IO.File]::WriteAllText("$stage\release-manifest.json",($manifest|ConvertTo-Json -Depth 20),[Text.UTF8Encoding]::new($false))
-          $makensis="${env:ProgramFiles(x86)}\NSIS\makensis.exe"
-          if(!(Test-Path $makensis)){choco install nsis --yes --no-progress --limit-output;if($LASTEXITCODE -ne 0){throw 'NSIS install failed'}}
-          $out=Join-Path $repo 'output';New-Item $out -ItemType Directory|Out-Null
-          $setup=Join-Path $out 'DrillingWorkbench_Setup_1.0.3_x64.exe'
-          foreach($file in @("DrillingWorkbench.exe","README.zh-TW.txt","drilling-workbench-blue.ico","app\index.html")){if(!(Test-Path (Join-Path $stage $file))){throw "Missing staged file: $file"}}
-          Get-ChildItem $stage -File | Select-Object Name,Length | Format-Table
-          & $makensis /V3 /INPUTCHARSET UTF8 "/DSTAGE=$stage" "/DOUTPUT=$setup" "$source\installer.nsi"
-          if($LASTEXITCODE -ne 0 -or !(Test-Path $setup)){throw 'Installer compilation failed'}
-          $sha=(Get-FileHash $setup -Algorithm SHA256).Hash.ToLower()
-          "$sha  DrillingWorkbench_Setup_1.0.3_x64.exe" | Out-File "$out\SHA256SUMS.txt" -Encoding utf8
-          @{version='1.0.3';sha256=$sha;bytes=(Get-Item $setup).Length;inputInstallerSHA256=$expected;historyProjects=14;historyPrices=322;build='Native Windows MSVC and NSIS';shortcutFix='Removed post-install shortcut mutation'} | ConvertTo-Json | Out-File "$out\Build_Report.json" -Encoding utf8
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: installer-candidate-1.0.3
-          path: output/*
-          retention-days: 7
+    - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      with:
+        name: installer-candidate-1.0.3
+        path: output
+        run-id: 42501311386
+        github-token: ${{ github.token }}
+    - name: Verify unchanged native candidate before rechecking
+      shell: pwsh
+      run: '$m=Get-Content ''output/Build_Report.json'' -Raw -Encoding utf8|ConvertFrom-Json
+
+        if($m.sha256 -ne ''fb9f7f9f668ae038ebba5d3feda29892daf808c721cca4189a9369aa3a4a4869'' -or (Get-FileHash ''output/DrillingWorkbench_Setup_1.0.3_x64.exe'' -Algorithm
+        SHA256).Hash.ToLower() -ne $m.sha256){throw ''Candidate changed''}
+
+        '
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: installer-candidate-1.0.3
+        path: output/*
+        retention-days: 7
   windows-check:
     needs: build-installer
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-2022, windows-2025]
+        os:
+        - windows-2022
+        - windows-2025
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     steps:
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          name: installer-candidate-1.0.3
-          path: candidate
-      - name: Verify candidate checksum
-        shell: pwsh
-        run: |
-          $setup=Join-Path $env:GITHUB_WORKSPACE 'candidate/DrillingWorkbench_Setup_1.0.3_x64.exe'
-          $meta=Get-Content 'candidate/Build_Report.json' -Raw -Encoding utf8|ConvertFrom-Json
-          if((Get-FileHash $setup -Algorithm SHA256).Hash.ToLower() -ne $meta.sha256){throw 'Candidate checksum mismatch'}
-          "SETUP=$setup" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
-      - name: Native installation, startup, persistence, upgrade and uninstall
-        shell: pwsh
-        run: |
-          $ErrorActionPreference='Stop'
-          $root=Join-Path $env:RUNNER_TEMP '鑽探工作台 測試'
-          Write-Host 'CHECK installing candidate'
-          $process=Start-Process -FilePath $env:SETUP -ArgumentList "/S /D=$root" -Wait -PassThru
-          if($process.ExitCode -ne 0){throw 'Installation failed'}
-          if(!(Test-Path "$root\鑽探工作台.exe")){throw 'Launcher missing'}
-          $desktop=[Environment]::GetFolderPath('Desktop')
-          $menu=Join-Path ([Environment]::GetFolderPath('Programs')) '鑽探工作台'
-          $shell=New-Object -ComObject WScript.Shell
-          foreach($path in @("$desktop\鑽探工作台.lnk","$menu\鑽探工作台.lnk")){
-            if(!(Test-Path $path)){throw 'Shortcut missing'}
-            $link=$shell.CreateShortcut($path)
-            $icon=$link.IconLocation -replace '"','' -replace ',\s*',','
-            Write-Host ("Shortcut={0}; Target={1}; Icon={2}; Expected={3}" -f $path,$link.TargetPath,$link.IconLocation,"$root\鑽探工作台.exe")
-            if($link.TargetPath -ne "$root\鑽探工作台.exe" -or $icon -notlike '*鑽探工作台.exe,0'){throw 'Shortcut icon or target mismatch'}
-          }
-          function Open-Workbench {
-            Remove-Item "$root\data\desktop-instance.json" -Force -ErrorAction SilentlyContinue
-            Start-Process -FilePath "$root\鑽探工作台.exe"
-            for($i=0;$i -lt 90;$i++){
-              Start-Sleep 1
-              if(Test-Path "$root\data\desktop-instance.json"){
-                $instance=Get-Content "$root\data\desktop-instance.json" -Raw -Encoding utf8|ConvertFrom-Json
-                $url="http://127.0.0.1:$($instance.port)"
-                try{$info=Invoke-RestMethod "$url/api/desktop-info";if($info.app -eq 'drilling-workbench-windows-v1'){return $url}}catch{}
-              }
-            }
-            if(Test-Path "$root\data\desktop.log"){Get-Content "$root\data\desktop.log" -Tail 60 -Encoding utf8}
-            throw 'Native launcher or UTF8 startup failed'
-          }
-          function Close-Workbench($url){
-            Invoke-RestMethod "$url/api/desktop-stop" -Method Post|Out-Null
-            Start-Sleep 3
-            Get-CimInstance Win32_Process|Where-Object {$_.ExecutablePath -and $_.ExecutablePath.StartsWith("$root\browser\")}|ForEach-Object {Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue}
-            Start-Sleep 2
-          }
-          Write-Host 'CHECK native startup'
-          $url=Open-Workbench
-          $history=Invoke-RestMethod "$url/api/history"
-          if($history.records.Count -ne 322 -or $history.projectCount -ne 14){throw 'Bundled history incomplete'}
-          Write-Host 'CHECK bundled browser render'
-          $domFile=Join-Path $env:RUNNER_TEMP 'workbench-dom.txt'
-          & "$root\browser\chrome.exe" --headless=new --no-sandbox --disable-gpu --no-first-run --disable-background-networking "--user-data-dir=$env:RUNNER_TEMP\browser-native-test" --dump-dom --timeout=20000 --virtual-time-budget=10000 $url 2>$null | Out-File $domFile -Encoding utf8
-          $dom=Get-Content $domFile -Raw -Encoding utf8
-          if($dom -notmatch 'id="projectName"' -or $dom -notmatch 'id="settle"'){throw 'Bundled browser cannot render workbench'}
-          $state=(Invoke-RestMethod "$url/api/project").project
-          if(!$state){throw 'Project disk state absent after rendering'}
-          $state.project.name='繁中工程師安裝測試'
-          $body=[Text.Encoding]::UTF8.GetBytes(($state|ConvertTo-Json -Depth 100 -Compress))
-          Invoke-RestMethod "$url/api/project" -Method Post -ContentType 'application/json; charset=utf-8' -Body $body|Out-Null
-          Close-Workbench $url
-          $url=Open-Workbench
-          if((Invoke-RestMethod "$url/api/project").project.project.name -ne '繁中工程師安裝測試'){throw 'Project not preserved on restart'}
-          if((Invoke-RestMethod "$url/api/history").records.Count -ne 322){throw 'History lost on restart'}
-          Close-Workbench $url
-          $before=(Get-FileHash "$root\data\current-project.json" -Algorithm SHA256).Hash
-          $process=Start-Process -FilePath $env:SETUP -ArgumentList "/S /D=$root" -Wait -PassThru
-          if($process.ExitCode -ne 0 -or (Get-FileHash "$root\data\current-project.json" -Algorithm SHA256).Hash -ne $before){throw 'Upgrade changed project data'}
-          $process=Start-Process -FilePath "$root\解除安裝.exe" -ArgumentList '/S' -Wait -PassThru
-          if($process.ExitCode -ne 0){throw 'Uninstall failed'}
-          Start-Sleep 3
-          if(!(Test-Path "$root\data\history.sqlite3") -or !(Test-Path "$root\data\current-project.json")){throw 'Uninstall removed user data'}
-          if(Test-Path "$root\鑽探工作台.exe"){throw 'Uninstall left program installed'}
-          'PASS native Windows installation, shortcuts, bundled browser, UTF8 startup, disk state, restart, upgrade and retained uninstall data'
+    - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+    - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      with:
+        name: installer-candidate-1.0.3
+        path: candidate
+    - name: Verify candidate checksum
+      shell: pwsh
+      run: '$setup=Join-Path $env:GITHUB_WORKSPACE ''candidate/DrillingWorkbench_Setup_1.0.3_x64.exe''
+
+        $meta=Get-Content ''candidate/Build_Report.json'' -Raw -Encoding utf8|ConvertFrom-Json
+
+        if((Get-FileHash $setup -Algorithm SHA256).Hash.ToLower() -ne $meta.sha256){throw ''Candidate checksum mismatch''}
+
+        "SETUP=$setup" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+
+        '
+    - name: Native installation, startup, persistence, upgrade and uninstall
+      shell: pwsh
+      run: "$ErrorActionPreference='Stop'\n$root=Join-Path $env:RUNNER_TEMP '鑽探工作台 測試'\nWrite-Host 'CHECK installing candidate'\n$process=Start-Process -FilePath\
+        \ $env:SETUP -ArgumentList \"/S /D=$root\" -Wait -PassThru\nif($process.ExitCode -ne 0){throw 'Installation failed'}\nif(!(Test-Path \"$root\\鑽探工作台.exe\"\
+        )){throw 'Launcher missing'}\n$desktop=[Environment]::GetFolderPath('Desktop')\n$menu=Join-Path ([Environment]::GetFolderPath('Programs')) '鑽探工作台'\n. (Join-Path\
+        \ $env:GITHUB_WORKSPACE 'release-tools/Read-Shortcut.ps1')\nforeach($path in @(\"$desktop\\鑽探工作台.lnk\",\"$menu\\鑽探工作台.lnk\")){\n  if(!(Test-Path $path)){throw\
+        \ 'Shortcut missing'}\n  $raw=[IO.File]::ReadAllBytes($path)\n  Write-Host (\"Shortcut file={0}; Bytes={1}; Base64={2}\" -f $path,$raw.Length,[Convert]::ToBase64String($raw))\n\
+        \  $link=[NativeShortcutReader]::Read($path)\n  Write-Host (\"Native target={0}; Icon={1}; Index={2}; Expected={3}\" -f $link.Target,$link.Icon,$link.IconIndex,\"\
+        $root\\鑽探工作台.exe\")\n  if($link.Target -ne \"$root\\鑽探工作台.exe\" -or $link.Icon -ne \"$root\\鑽探工作台.exe\" -or $link.IconIndex -ne 0){throw 'Native shortcut\
+        \ target or icon mismatch'}\n}\nfunction Open-Workbench {\n  Remove-Item \"$root\\data\\desktop-instance.json\" -Force -ErrorAction SilentlyContinue\n  Start-Process\
+        \ -FilePath \"$root\\鑽探工作台.exe\"\n  for($i=0;$i -lt 90;$i++){\n    Start-Sleep 1\n    if(Test-Path \"$root\\data\\desktop-instance.json\"){\n      $instance=Get-Content\
+        \ \"$root\\data\\desktop-instance.json\" -Raw -Encoding utf8|ConvertFrom-Json\n      $url=\"http://127.0.0.1:$($instance.port)\"\n      try{$info=Invoke-RestMethod\
+        \ \"$url/api/desktop-info\";if($info.app -eq 'drilling-workbench-windows-v1'){return $url}}catch{}\n    }\n  }\n  if(Test-Path \"$root\\data\\desktop.log\"\
+        ){Get-Content \"$root\\data\\desktop.log\" -Tail 60 -Encoding utf8}\n  throw 'Native launcher or UTF8 startup failed'\n}\nfunction Close-Workbench($url){\n\
+        \  Invoke-RestMethod \"$url/api/desktop-stop\" -Method Post|Out-Null\n  Start-Sleep 3\n  Get-CimInstance Win32_Process|Where-Object {$_.ExecutablePath -and\
+        \ $_.ExecutablePath.StartsWith(\"$root\\browser\\\")}|ForEach-Object {Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue}\n  Start-Sleep 2\n\
+        }\nWrite-Host 'CHECK native startup'\n$url=Open-Workbench\n$history=Invoke-RestMethod \"$url/api/history\"\nif($history.records.Count -ne 322 -or $history.projectCount\
+        \ -ne 14){throw 'Bundled history incomplete'}\nWrite-Host 'CHECK bundled browser render'\n$domFile=Join-Path $env:RUNNER_TEMP 'workbench-dom.txt'\n& \"$root\\\
+        browser\\chrome.exe\" --headless=new --no-sandbox --disable-gpu --no-first-run --disable-background-networking \"--user-data-dir=$env:RUNNER_TEMP\\browser-native-test\"\
+        \ --dump-dom --timeout=20000 --virtual-time-budget=10000 $url 2>$null | Out-File $domFile -Encoding utf8\n$dom=Get-Content $domFile -Raw -Encoding utf8\n\
+        if($dom -notmatch 'id=\"projectName\"' -or $dom -notmatch 'id=\"settle\"'){throw 'Bundled browser cannot render workbench'}\n$state=(Invoke-RestMethod \"\
+        $url/api/project\").project\nif(!$state){throw 'Project disk state absent after rendering'}\n$state.project.name='繁中工程師安裝測試'\n$body=[Text.Encoding]::UTF8.GetBytes(($state|ConvertTo-Json\
+        \ -Depth 100 -Compress))\nInvoke-RestMethod \"$url/api/project\" -Method Post -ContentType 'application/json; charset=utf-8' -Body $body|Out-Null\nClose-Workbench\
+        \ $url\n$url=Open-Workbench\nif((Invoke-RestMethod \"$url/api/project\").project.project.name -ne '繁中工程師安裝測試'){throw 'Project not preserved on restart'}\n\
+        if((Invoke-RestMethod \"$url/api/history\").records.Count -ne 322){throw 'History lost on restart'}\nClose-Workbench $url\n$before=(Get-FileHash \"$root\\\
+        data\\current-project.json\" -Algorithm SHA256).Hash\n$process=Start-Process -FilePath $env:SETUP -ArgumentList \"/S /D=$root\" -Wait -PassThru\nif($process.ExitCode\
+        \ -ne 0 -or (Get-FileHash \"$root\\data\\current-project.json\" -Algorithm SHA256).Hash -ne $before){throw 'Upgrade changed project data'}\n$process=Start-Process\
+        \ -FilePath \"$root\\解除安裝.exe\" -ArgumentList '/S' -Wait -PassThru\nif($process.ExitCode -ne 0){throw 'Uninstall failed'}\nStart-Sleep 3\nif(!(Test-Path \"\
+        $root\\data\\history.sqlite3\") -or !(Test-Path \"$root\\data\\current-project.json\")){throw 'Uninstall removed user data'}\nif(Test-Path \"$root\\鑽探工作台.exe\"\
+        ){throw 'Uninstall left program installed'}\n'PASS native Windows installation, shortcuts, bundled browser, UTF8 startup, disk state, restart, upgrade and\
+        \ retained uninstall data'\n"
   publish-full-installer:
-    needs: [build-installer, windows-check]
+    needs:
+    - build-installer
+    - windows-check
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          name: installer-candidate-1.0.3
-          path: candidate
-      - name: Publish only after both Windows validations pass
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          cat > release-notes.md <<'NOTES'
-          # 鑽探工作台 Windows 單機版 1.0.3
-          完整離線安裝檔，可直接下載 Setup.exe，不需下載工具或分段合併。
-          修正 UTF-8／CP950 啟動編碼問題，並改用原生安裝捷徑，保留藍色勾選板與鑽頭圖示。
-          內含全部執行與視窗元件，及 14 案／322 筆歷史契約單價。新資料儲存於安裝資料夾，不使用雲端儲存。
-          升級保留既有資料；解除安裝保留 data 與 exports。
-          本檔已在 Windows Server 2022 與 2025 的 GitHub runner 通過原生安裝、啟動、內建瀏覽器、繁中專案儲存、重新開啟、升級及解除安裝保留資料測試。
-          這些不是 Windows 10／11 桌面實機；公司端的防毒與權限政策仍需由各單位確認。
-          NOTES
-          gh release create drilling-desktop-v1.0.3 --repo "$GITHUB_REPOSITORY" --draft --title "鑽探工作台 Windows 1.0.3 完整離線安裝版" --notes-file release-notes.md candidate/*
-          gh release edit drilling-desktop-v1.0.3 --repo "$GITHUB_REPOSITORY" --draft=false --latest
+    - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      with:
+        name: installer-candidate-1.0.3
+        path: candidate
+    - name: Publish only after both Windows validations pass
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: 'cat > release-notes.md <<''NOTES''
+
+        # 鑽探工作台 Windows 單機版 1.0.3
+
+        完整離線安裝檔，可直接下載 Setup.exe，不需下載工具或分段合併。
+
+        修正 UTF-8／CP950 啟動編碼問題，並改用原生安裝捷徑，保留藍色勾選板與鑽頭圖示。
+
+        內含全部執行與視窗元件，及 14 案／322 筆歷史契約單價。新資料儲存於安裝資料夾，不使用雲端儲存。
+
+        升級保留既有資料；解除安裝保留 data 與 exports。
+
+        本檔已在 Windows Server 2022 與 2025 的 GitHub runner 通過原生安裝、啟動、內建瀏覽器、繁中專案儲存、重新開啟、升級及解除安裝保留資料測試。
+
+        這些不是 Windows 10／11 桌面實機；公司端的防毒與權限政策仍需由各單位確認。
+
+        NOTES
+
+        gh release create drilling-desktop-v1.0.3 --repo "$GITHUB_REPOSITORY" --draft --title "鑽探工作台 Windows 1.0.3 完整離線安裝版" --notes-file release-notes.md candidate/*
+
+        gh release edit drilling-desktop-v1.0.3 --repo "$GITHUB_REPOSITORY" --draft=false --latest
+
+        '
+'on':
+  push:
+    branches:
+    - release/verify-drilling-windows-1.0.2
