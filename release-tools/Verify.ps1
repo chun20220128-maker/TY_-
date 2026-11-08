@@ -4,10 +4,19 @@ $setup=Join-Path $repo 'candidate/DrillingWorkbench_Setup_1.0.4_x64.exe';$meta=G
 if((Get-FileHash $setup -Algorithm SHA256).Hash.ToLower() -ne $meta.sha256){throw 'Installer checksum mismatch'}
 $root=Join-Path $env:RUNNER_TEMP '鑽探工作台 離線測試'
 # The installer, Python hosts and bundled browser have outbound Internet blocked throughout install/use tests.
+Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled True
+if(@(Get-NetFirewallProfile|Where-Object {!$_.Enabled}).Count){throw 'Firewall not enabled'}
 $paths=@($setup,"$root\runtime\python.exe","$root\runtime\pythonw.exe","$root\browser\chrome.exe")
 foreach($program in $paths){New-NetFirewallRule -DisplayName ('Workbench offline '+[guid]::NewGuid()) -Direction Outbound -Action Block -RemoteAddress Internet -Program $program -Profile Any|Out-Null}
 $process=Start-Process -FilePath $setup -ArgumentList "/S /D=$root" -Wait -PassThru
 if($process.ExitCode -ne 0){throw 'Offline installation failed'}
+$networkProbe="import socket;blocked=False
+try: socket.create_connection(('1.1.1.1',443),timeout=3).close()
+except OSError: blocked=True
+assert blocked,'Product runtime still has Internet access'
+print('PASS product runtime Internet blocked')"
+& "$root\runtime\python.exe" -X utf8 -c $networkProbe
+if($LASTEXITCODE -ne 0){throw 'Offline firewall verification failed'}
 $manifest=Get-Content "$root\release-manifest.json" -Raw -Encoding utf8|ConvertFrom-Json -AsHashtable
 foreach($name in $manifest.files.Keys){if((Get-FileHash (Join-Path $root $name) -Algorithm SHA256).Hash.ToLower() -ne $manifest.files[$name]){throw "Installed payload mismatch: $name"}}
 . "$source\Read-Shortcut.ps1"
