@@ -47,6 +47,8 @@ function Wait-Closed {
  if($remaining.Count){$remaining|Format-Table Name,ProcessId,ExecutablePath;throw 'Workbench processes did not fully stop'}
  if((Probe 'info').trayWindow){throw 'Tray icon owner still running after exit'}
 }
+& "$root\runtime\python.exe" -X utf8 "$source\Test-Tray-Events.py" $root | Out-File "$report\Native_Tray_Events.json" -Encoding utf8
+if($LASTEXITCODE -ne 0){throw 'Native tray registration or event test failed'}
 $url=Open-Workbench
 $history=Invoke-RestMethod "$url/api/history";if($history.records.Count -ne 322 -or $history.projectCount -ne 14){throw 'Bundled 14/322 history missing'}
 $native=Probe 'info';$native|ConvertTo-Json -Depth 10|Out-File "$report\Native_Icon_Verification.json" -Encoding utf8
