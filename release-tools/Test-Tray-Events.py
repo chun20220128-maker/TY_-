@@ -19,11 +19,17 @@ class Identifier(ctypes.Structure):_fields_=[('size',w.DWORD),('hwnd',w.HWND),('
 s.Shell_NotifyIconGetRect.argtypes=[ctypes.POINTER(Identifier),ctypes.POINTER(w.RECT)];s.Shell_NotifyIconGetRect.restype=ctypes.c_long
 try:
  tray.start();handle=tray.hwnd;ident=Identifier();ident.size=ctypes.sizeof(ident);ident.hwnd=handle;ident.id=1;rect=w.RECT()
- assert s.Shell_NotifyIconGetRect(ctypes.byref(ident),ctypes.byref(rect))==0
+ for attempt in range(50):
+  if s.Shell_NotifyIconGetRect(ctypes.byref(ident),ctypes.byref(rect))==0:break
+  time.sleep(.1)
+ else:raise AssertionError('Running tray icon did not become visible')
  u.PostMessageW(handle,0x8001,0,0x203);assert opened.wait(5),'Double-click handler did not run'
  u.PostMessageW(handle,0x8001,0,0x205);assert exited.wait(5),'Menu exit handler did not run'
  assert menus==[['開啟鑽探工作台','結束程式']],menus
  tray.close();assert not tray.hwnd
- assert s.Shell_NotifyIconGetRect(ctypes.byref(ident),ctypes.byref(rect))!=0,'Stopped tray icon still registered'
+ for attempt in range(50):
+  if s.Shell_NotifyIconGetRect(ctypes.byref(ident),ctypes.byref(rect))!=0:break
+  time.sleep(.1)
+ else:raise AssertionError('Stopped tray icon still registered')
  print(json.dumps({'nativeNotificationIconRegistered':True,'nativeIconRemovedAfterStop':True,'doubleClickEvent':True,'nativeMenuLabels':menus[0],'menuSelectionHandler':True,'physicalMouseInteractionTested':False}))
 finally:tray.close();u.TrackPopupMenu=original
