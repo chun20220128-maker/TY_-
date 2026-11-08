@@ -9,8 +9,8 @@ Unicode true
 !ifndef OUTPUT
  !error "Define OUTPUT (Setup.exe)"
 !endif
-!define MUI_ICON "${STAGE}/drilling-workbench-blue.ico"
-!define MUI_UNICON "${STAGE}/drilling-workbench-blue.ico"
+!define MUI_ICON "${STAGE}\drilling-workbench-blue.ico"
+!define MUI_UNICON "${STAGE}\drilling-workbench-blue.ico"
 Name "鑽探工作台"
 OutFile "${OUTPUT}"
 InstallDir "$LOCALAPPDATA\Programs\DrillingWorkbench"
@@ -88,27 +88,27 @@ Section "鑽探工作台（完整離線版）"
  SetRegView 64
  SetOverwrite on
  SetOutPath "$INSTDIR"
- File /oname=鑽探工作台.exe "${STAGE}/DrillingWorkbench.exe"
- File "${STAGE}/drilling-workbench-blue.ico"
- File /oname=使用說明.txt "${STAGE}/README.zh-TW.txt"
- File "${STAGE}/THIRD-PARTY-NOTICES.txt"
- File "${STAGE}/MINGW-LICENSE.txt"
- File "${STAGE}/CHROMIUM-LICENSE.txt"
- File "${STAGE}/release-manifest.json"
+ File /oname=鑽探工作台.exe "${STAGE}\DrillingWorkbench.exe"
+ File "${STAGE}\drilling-workbench-blue.ico"
+ File /oname=使用說明.txt "${STAGE}\README.zh-TW.txt"
+ File "${STAGE}\THIRD-PARTY-NOTICES.txt"
+ File "${STAGE}\MINGW-LICENSE.txt"
+ File "${STAGE}\CHROMIUM-LICENSE.txt"
+ File "${STAGE}\release-manifest.json"
  SetOutPath "$INSTDIR\app"
- File /r /x "__pycache__" "${STAGE}/app/*"
+ File /r /x "__pycache__" "${STAGE}\app\*"
  SetOutPath "$INSTDIR\runtime"
- File /r /x "__pycache__" "${STAGE}/runtime/*"
+ File /r /x "__pycache__" "${STAGE}\runtime\*"
  SetOutPath "$INSTDIR\browser"
- File /r "${STAGE}/browser/*"
+ File /r "${STAGE}\browser\*"
  CreateDirectory "$INSTDIR\exports"
  CreateDirectory "$INSTDIR\data"
  ; Seed only a new database. Existing libraries, projects and backups are untouched.
  IfFileExists "$INSTDIR\data\history.sqlite3" keep_history
  SetOutPath "$INSTDIR\data"
  SetOverwrite off
- File "${STAGE}/data/history.sqlite3"
- File "${STAGE}/data/history-backup.sqlite3"
+ File "${STAGE}\data\history.sqlite3"
+ File "${STAGE}\data\history-backup.sqlite3"
  SetOverwrite on
  keep_history:
  SetOutPath "$INSTDIR"

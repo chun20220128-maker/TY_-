@@ -58,6 +58,8 @@ jobs:
           if(!(Test-Path $makensis)){choco install nsis --yes --no-progress --limit-output;if($LASTEXITCODE -ne 0){throw 'NSIS install failed'}}
           $out=Join-Path $repo 'output';New-Item $out -ItemType Directory|Out-Null
           $setup=Join-Path $out 'DrillingWorkbench_Setup_1.0.3_x64.exe'
+          foreach($file in @("DrillingWorkbench.exe","README.zh-TW.txt","drilling-workbench-blue.ico","app\index.html")){if(!(Test-Path (Join-Path $stage $file))){throw "Missing staged file: $file"}}
+          Get-ChildItem $stage -File | Select-Object Name,Length | Format-Table
           & $makensis /V3 /INPUTCHARSET UTF8 "/DSTAGE=$stage" "/DOUTPUT=$setup" "$source\installer.nsi"
           if($LASTEXITCODE -ne 0 -or !(Test-Path $setup)){throw 'Installer compilation failed'}
           $sha=(Get-FileHash $setup -Algorithm SHA256).Hash.ToLower()
