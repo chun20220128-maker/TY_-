@@ -42,11 +42,14 @@ jobs:
           $vs=& "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
           if(!$vs){throw 'MSVC toolchain missing'}
           $vcvars=Join-Path $vs 'VC\Auxiliary\Build\vcvars64.bat'
-          $command='"'+$vcvars+'" && rc /nologo /c 65001 /fo "'+$build+'\launcher.res" "'+$source+'\launcher.rc" && cl /nologo /utf-8 /O2 /MT /Fe:"'+$stage+'\鑽探工作台.exe" /Fo"'+$build+'\launcher.obj" "'+$source+'\launcher.c" "'+$build+'\launcher.res" /link /SUBSYSTEM:WINDOWS /INCREMENTAL:NO shell32.lib user32.lib'
+          $command='"'+$vcvars+'" && rc /nologo /c 65001 /fo "'+$build+'\launcher.res" "'+$source+'\launcher.rc" && cl /nologo /utf-8 /O2 /MT /Fe:"'+$build+'\DrillingWorkbench.exe" /Fo"'+$build+'\launcher.obj" "'+$source+'\launcher.c" "'+$build+'\launcher.res" /link /SUBSYSTEM:WINDOWS /INCREMENTAL:NO shell32.lib user32.lib'
           Push-Location $stage
           try{& $env:ComSpec /d /s /c $command;if($LASTEXITCODE -ne 0){throw 'Native launcher build failed'}}finally{Pop-Location}
+          Copy-Item "$build\DrillingWorkbench.exe" "$stage\鑽探工作台.exe" -Force
+          Copy-Item "$build\DrillingWorkbench.exe" "$stage\DrillingWorkbench.exe" -Force
           $guide=Get-Content "$stage\使用說明.txt" -Raw -Encoding utf8
           [IO.File]::WriteAllText("$stage\使用說明.txt",($guide -replace '1.0.2','1.0.3'),[Text.UTF8Encoding]::new($true))
+          Copy-Item "$stage\使用說明.txt" "$stage\README.zh-TW.txt" -Force
           $manifest.release='Windows-offline-installer-v1.0.3'
           $manifest.shortcutBranding='native NSIS shortcuts; post-install property mutation removed'
           foreach($name in @($manifest.files.Keys)){$manifest.files[$name]=(Get-FileHash (Join-Path $stage $name) -Algorithm SHA256).Hash.ToLower()}

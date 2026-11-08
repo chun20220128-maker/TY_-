@@ -88,9 +88,9 @@ Section "鑽探工作台（完整離線版）"
  SetRegView 64
  SetOverwrite on
  SetOutPath "$INSTDIR"
- File "${STAGE}/鑽探工作台.exe"
+ File /oname=鑽探工作台.exe "${STAGE}/DrillingWorkbench.exe"
  File "${STAGE}/drilling-workbench-blue.ico"
- File "${STAGE}/使用說明.txt"
+ File /oname=使用說明.txt "${STAGE}/README.zh-TW.txt"
  File "${STAGE}/THIRD-PARTY-NOTICES.txt"
  File "${STAGE}/MINGW-LICENSE.txt"
  File "${STAGE}/CHROMIUM-LICENSE.txt"
