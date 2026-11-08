@@ -39,7 +39,10 @@ function Open-Workbench {
  }
  if(Test-Path "$root\data\desktop.log"){Get-Content "$root\data\desktop.log" -Tail 80 -Encoding utf8}
  if(Test-Path "$root\data\desktop-instance.json"){Get-Content "$root\data\desktop-instance.json" -Raw -Encoding utf8}
+ Write-Host "Expected root: $root"
  Probe 'info'|ConvertTo-Json -Depth 10|Write-Host
+ Get-ChildItem "$root\data" -Force|Select-Object Name,Length|Format-Table
+ Get-CimInstance Win32_Process|Where-Object {$_.Name -in @('pythonw.exe','chrome.exe')}|Select-Object Name,ProcessId,ExecutablePath,CommandLine|Format-List
  Get-CimInstance Win32_Process|Where-Object {$_.ExecutablePath -and $_.ExecutablePath.StartsWith($root)}|Select-Object Name,ProcessId,CommandLine|Format-Table
  throw 'Native startup or notification icon failed' 
 }

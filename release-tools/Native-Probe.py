@@ -44,7 +44,7 @@ elif action=='menu-exit':
  result=subprocess.run(['powershell.exe','-NoProfile','-EncodedCommand',encoded],capture_output=True,text=True,timeout=20)
  if result.returncode:raise RuntimeError('Native menu invocation failed: '+result.stderr)
 
-info={'trayWindow':int(tray or 0),'browserWindows':len(windows),'windowIconHandles':[int(u.SendMessageW(h,0x7f,0,0)) for h in windows]}
+info={'rootArgument':str(root),'resolvedRoot':str(root.resolve()),'dataFiles':[p.name for p in (root/'data').glob('*')],'instanceFile':(root/'data/desktop-instance.json').read_text(encoding='utf-8') if (root/'data/desktop-instance.json').exists() else None,'trayWindow':int(tray or 0),'browserWindows':len(windows),'windowIconHandles':[int(u.SendMessageW(h,0x7f,0,0)) for h in windows]}
 if action=='info' and tray:
  class Identifier(ctypes.Structure):_fields_=[('size',w.DWORD),('hwnd',w.HWND),('id',w.UINT),('guid',ctypes.c_byte*16)]
  ident=Identifier();ident.size=ctypes.sizeof(ident);ident.hwnd=tray;ident.id=1;rect=w.RECT()
