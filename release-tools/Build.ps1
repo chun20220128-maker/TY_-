@@ -38,5 +38,5 @@ $sha=(Get-FileHash $setup -Algorithm SHA256).Hash.ToLower()
 @{version='1.0.4';sha256=$sha;bytes=(Get-Item $setup).Length;inputInstallerSHA256=$expected;historyProjects=14;historyPrices=322;build='Native Windows MSVC and NSIS';networkRequired=$false;projectPersistence='RAM only; explicit export';tray='shown only while running'}|ConvertTo-Json|Out-File "$out\Build_Report.json" -Encoding utf8
 Copy-Item "$stage\使用說明.txt" "$out\使用說明.txt"
 python -m pip install --disable-pip-version-check pefile==2024.8.26
-python "$source\verify-windows-icons.py" --icon "$stage\drilling-workbench-blue.ico" $setup "$stage\鑽探工作台.exe" | Out-File "$out\Icon_Verification.json" -Encoding utf8
+python -X utf8 "$source\verify-windows-icons.py" --icon "$stage\drilling-workbench-blue.ico" $setup "$stage\鑽探工作台.exe" | Out-File "$out\Icon_Verification.json" -Encoding utf8
 if($LASTEXITCODE -ne 0){throw 'Embedded icon verification failed'}

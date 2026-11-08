@@ -20,6 +20,7 @@ jobs:
         name: installer-1.0.4
         path: output/*
         retention-days: 14
+      if: always()
   windows-check:
     needs: build
     strategy:
@@ -73,3 +74,5 @@ jobs:
         \ and size==p.stat().st_size\npathlib.Path('Delivery_Verification.json').write_text(json.dumps({'publicURL':u,'bytes':size,'sha256':expected,'publicDownloadVerified':True},indent=2))\n\
         CHECK\ngh release upload drilling-desktop-v1.0.4 Delivery_Verification.json\
         \ --clobber\n"
+env:
+  PYTHONUTF8: '1'
