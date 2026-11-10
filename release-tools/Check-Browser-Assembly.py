@@ -11,11 +11,13 @@ def activation():
  handle=kernel.CreateActCtxW(ctypes.byref(context))
  if handle==ctypes.c_void_p(-1).value:return ctypes.get_last_error()
  kernel.ReleaseActCtx(handle);return 0
+if '--probe' in sys.argv:
+ print(activation());raise SystemExit(0)
 assert activation()==0,'Intact browser activation context failed'
 if '--reproduce-missing' in sys.argv:
  manifest=folder/version/(version+'.manifest');backup=manifest.with_suffix('.manifest.test-backup');manifest.rename(backup)
  try:
-  error=activation();assert error==14001,('Expected SxS 14001',error)
+  error=int(subprocess.check_output([sys.executable,str(Path(__file__).resolve()),str(folder),'--probe'],text=True).strip());assert error==14001,('Expected SxS 14001',error)
   try:
    process=subprocess.Popen([str(folder/'chrome.exe'),'--version'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
   except OSError as exc:assert exc.winerror==14001
