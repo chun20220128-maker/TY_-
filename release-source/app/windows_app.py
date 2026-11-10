@@ -99,6 +99,23 @@ def find_browser():
   if found:candidates.append(Path(found))
  return next((p for p in candidates if p.is_file()),None)
 
+def verify_browser_runtime(browser):
+ """Check only our bundled runtime. A system browser keeps its own installation."""
+ if browser.resolve()!=(ROOT/'browser/chrome.exe').resolve():return
+ manifest_path=ROOT/'release-manifest.json'
+ if not manifest_path.exists():return
+ manifest=json.loads(manifest_path.read_text(encoding='utf-8'))
+ files=manifest.get('browserEntryFiles',[])
+ if not files:return
+ import hashlib
+ hashes={name.replace('\\','/'):digest for name,digest in manifest['files'].items()}
+ for name in files:
+  path=ROOT/'browser'/name
+  if not path.is_file():raise RuntimeError('內附視窗元件缺少 '+name+'。請重新執行完整安裝檔修復；data 與匯出檔案會保留。')
+  expected=hashes.get('browser/'+name)
+  with path.open('rb') as source:actual=hashlib.file_digest(source,'sha256').hexdigest()
+  if not expected or actual!=expected:raise RuntimeError('內附視窗元件損壞：'+name+'。請重新執行完整安裝檔修復。')
+
 def open_browser(url,prefer_existing=True):
  from tray import focus_workbench
  if prefer_existing and focus_workbench(find_browser()):return
@@ -106,9 +123,11 @@ def open_browser(url,prefer_existing=True):
  if not browser:raise RuntimeError('找不到內附視窗元件，請重新安裝鑽探工作台。')
  profile=DATA/'browser-profile';profile.mkdir(exist_ok=True);default=profile/'Default';default.mkdir(exist_ok=True);preferences=default/'Preferences'
  if not preferences.exists():preferences.write_text(json.dumps({'download':{'default_directory':str(EXPORTS),'prompt_for_download':True},'browser':{'check_default_browser':False}}),encoding='utf-8')
+ verify_browser_runtime(browser)
  from window_icons import start_window_branding
+ process=subprocess.Popen([str(browser),'--app='+url,'--user-data-dir='+str(profile),'--no-first-run','--no-default-browser-check','--lang=zh-TW','--disable-background-networking','--disable-component-update','--disable-sync','--disable-domain-reliability','--no-pings','--metrics-recording-only','--disable-features=Translate,MediaRouter,OptimizationHints,OptimizationGuideModelDownloading,AutofillServerCommunication'],cwd=str(browser.parent),stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
  start_window_branding(ROOT,browser)
- return subprocess.Popen([str(browser),'--app='+url,'--user-data-dir='+str(profile),'--no-first-run','--no-default-browser-check','--lang=zh-TW','--disable-background-networking','--disable-component-update','--disable-sync','--disable-domain-reliability','--no-pings','--metrics-recording-only','--disable-features=Translate,MediaRouter,OptimizationHints,OptimizationGuideModelDownloading,AutofillServerCommunication'],stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+ return process
 
 def existing_instance():
  path=DATA/'desktop-instance.json'
@@ -156,7 +175,11 @@ def main():
    from tray import close_workbench
    close_workbench(find_browser())
    (DATA/'desktop-instance.json').unlink(missing_ok=True)
- except Exception as error:logging.exception('Startup failed');alert('無法啟動鑽探工作台：'+str(error)+'\n\n請將整份程式解壓縮到可寫入的資料夾，例如桌面或 D 槽。不要直接從 ZIP 或唯讀資料夾執行。')
+ except Exception as error:
+  logging.exception('Startup failed')
+  if getattr(error,'winerror',None)==14001:message='內附視窗元件無法載入（Windows 14001）。請使用「鑽探工作台-網頁入口」以電腦原有瀏覽器開啟，或重新執行新版完整安裝檔修復。'
+  else:message='無法啟動鑽探工作台：'+str(error)
+  alert(message+'\n\n歷史單價及已匯出的專案備份未被刪除。詳細紀錄位於安裝資料夾 data/desktop.log。')
  finally:
   if mutex:
    close=ctypes.windll.kernel32.CloseHandle;close.argtypes=[ctypes.c_void_p];close(mutex)

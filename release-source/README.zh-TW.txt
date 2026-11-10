@@ -1,4 +1,4 @@
-﻿鑽探工作台 1.0.4 完整離線安裝版（Windows 10／11 x64）
+﻿鑽探工作台 1.0.5 完整離線安裝版（Windows 10／11 x64）
 
 取得 Setup.exe 後即可離線安裝，不需要網路、帳號、Python、Chrome 或 Edge。安裝元件已全部內含。安裝於目前使用者可寫入的資料夾，預設 %LOCALAPPDATA%\Programs\DrillingWorkbench。
 
@@ -18,3 +18,6 @@ data/browser-profile 為此程式獨立的視窗設定；exports 為預設匯出
 更新前先匯出正在作業的專案、按「結束程式」，再執行新安裝檔。升級保留既有歷史資料庫、舊版存檔與使用者匯出檔案，不自動讀回舊專案。
 解除安裝保留 data 與 exports。請定期備份歷史資料庫資料夾與自行匯出的專案 JSON 到其他磁碟。
 本程式未附數位簽章；公司電腦的安裝與防毒政策仍由各單位管理。
+
+本機網頁入口
+雙擊「鑽探工作台-網頁入口.exe」使用電腦原有 Chrome／Edge，仍連線至自己的 127.0.0.1，沿用本機 SQLite。也可單獨下載 DrillingWorkbench_Web_Start.exe，直接用於已安裝的 1.0.4，不需重裝。請先關閉原先的錯誤視窗。

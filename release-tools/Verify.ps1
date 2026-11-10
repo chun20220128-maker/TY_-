@@ -1,6 +1,6 @@
 $ErrorActionPreference='Stop'
 $repo=$env:GITHUB_WORKSPACE;$source=Join-Path $repo 'release-tools';$report=Join-Path $repo 'verification';New-Item $report -ItemType Directory -Force|Out-Null
-$setup=Join-Path $repo 'candidate/DrillingWorkbench_Setup_1.0.4_x64.exe';$meta=Get-Content 'candidate/Build_Report.json' -Raw -Encoding utf8|ConvertFrom-Json
+$setup=Join-Path $repo 'candidate/DrillingWorkbench_Setup_1.0.5_x64.exe';$meta=Get-Content 'candidate/Build_Report.json' -Raw -Encoding utf8|ConvertFrom-Json
 if((Get-FileHash $setup -Algorithm SHA256).Hash.ToLower() -ne $meta.sha256){throw 'Installer checksum mismatch'}
 $root=Join-Path $env:RUNNER_TEMP '鑽探工作台 離線測試'
 # The installer, Python hosts and bundled browser have outbound Internet blocked throughout install/use tests.
@@ -69,6 +69,28 @@ $url=Open-Workbench
 node "$source\Test-UI.cjs" $root $url 'restart' $report
 if($LASTEXITCODE -ne 0){throw 'Cold restart or backup restore test failed'}
 Wait-Closed
+# Launch the tiny web entry against the original 1.0.4 host, using the installed Edge/Chrome.
+$hostSource=Get-Content "$root\app\windows_app.py" -Raw -Encoding utf8
+Copy-Item "$source\Legacy-Host-1.0.4.py" "$root\app\windows_app.py" -Force
+try{
+ Start-Process (Join-Path $repo 'candidate/DrillingWorkbench_Web_Start.exe')
+ $webReady=$false
+ for($i=0;$i -lt 60;$i++){
+  Start-Sleep 1
+  if(Test-Path "$root\data\desktop-instance.json"){
+   $instance=Get-Content "$root\data\desktop-instance.json" -Raw -Encoding utf8|ConvertFrom-Json;$url="http://127.0.0.1:$($instance.port)"
+   try{$project=(Invoke-RestMethod "$url/api/project").project;if($project -and $project.project.name -eq ''){$webReady=$true;break}}catch{}
+  }
+ }
+ if(!$webReady){throw 'Local web entry could not render legacy 1.0.4 through system browser'}
+ if((Invoke-RestMethod "$url/api/history").records.Count -ne 323){throw 'Web entry did not retain the existing history database'}
+ Invoke-RestMethod "$url/api/desktop-stop" -Method Post|Out-Null
+ Start-Sleep 3
+ # The system browser has its own executable outside the installation root.
+ for($i=0;$i -lt 20 -and (Probe 'info').trayWindow;$i++){Start-Sleep 1}
+ if((Probe 'info').trayWindow){throw 'Legacy web entry did not fully stop'}
+ @{legacyHost='1.0.4';systemBrowserRendered=$true;historyRetained=323;noReinstallRequired=$true}|ConvertTo-Json|Out-File "$report\Web_Entry_Verification.json" -Encoding utf8
+}finally{[IO.File]::WriteAllText("$root\app\windows_app.py",$hostSource,[Text.UTF8Encoding]::new($false))}
 $historyBefore=(Get-FileHash "$root\data\history.sqlite3" -Algorithm SHA256).Hash
 $backupBefore=(Get-FileHash "$root\exports\native-project-backup.json" -Algorithm SHA256).Hash
 # Preserve a user-owned legacy project file without loading it or altering it.

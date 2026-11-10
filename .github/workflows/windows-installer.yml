@@ -1,8 +1,8 @@
-name: Build and verify Drilling Workbench 1.0.4 offline installer
+name: Build and verify Drilling Workbench 1.0.5 offline installer
 'on':
   push:
     branches:
-    - release/drilling-desktop-v1.0.4
+    - release/drilling-desktop-v1.0.5
 permissions:
   contents: write
   actions: read
@@ -13,18 +13,12 @@ jobs:
     steps:
     - &id001
       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-    - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-      with:
-        name: installer-1.0.4
-        path: output
-        run-id: 42510613267
-        github-token: ${{ github.token }}
-    - name: Verify pinned candidate against unchanged product source
+    - name: Build repaired full offline installer and local web entry
       shell: pwsh
-      run: ./release-tools/Reuse-Candidate.ps1
+      run: ./release-tools/Build.ps1
     - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
-        name: installer-1.0.4
+        name: installer-1.0.5
         path: output/*
         retention-days: 14
       if: always()
@@ -42,7 +36,7 @@ jobs:
     - *id001
     - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
       with:
-        name: installer-1.0.4
+        name: installer-1.0.5
         path: candidate
     - name: Install browser test tooling (not a product dependency)
       shell: pwsh
@@ -66,20 +60,20 @@ jobs:
     - *id001
     - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
       with:
-        name: installer-1.0.4
+        name: installer-1.0.5
         path: candidate
     - name: Publish complete installer only after native checks pass
       env:
         GH_TOKEN: ${{ github.token }}
-      run: "gh release create drilling-desktop-v1.0.4 candidate/* --title \"鑽探工作台\
-        \ 1.0.4｜完整離線安裝版\" --notes-file release-tools/Release-Notes.md --target \"\
+      run: "gh release create drilling-desktop-v1.0.5 candidate/* --title \"鑽探工作台\
+        \ 1.0.5｜完整離線安裝版\" --notes-file release-tools/Release-Notes.md --target \"\
         $GITHUB_SHA\"\npython3 - <<'CHECK'\nimport json,hashlib,urllib.request,pathlib\n\
-        p=pathlib.Path('candidate/DrillingWorkbench_Setup_1.0.4_x64.exe')\nu='https://github.com/chun20220128-maker/TY_-/releases/download/drilling-desktop-v1.0.4/'+p.name\n\
+        p=pathlib.Path('candidate/DrillingWorkbench_Setup_1.0.5_x64.exe')\nu='https://github.com/chun20220128-maker/TY_-/releases/download/drilling-desktop-v1.0.5/'+p.name\n\
         with urllib.request.urlopen(u) as response:\n digest=hashlib.sha256();size=0\n\
         \ while chunk:=response.read(1024*1024):digest.update(chunk);size+=len(chunk)\n\
         expected=hashlib.sha256(p.read_bytes()).hexdigest()\nassert digest.hexdigest()==expected\
         \ and size==p.stat().st_size\npathlib.Path('Delivery_Verification.json').write_text(json.dumps({'publicURL':u,'bytes':size,'sha256':expected,'publicDownloadVerified':True},indent=2))\n\
-        CHECK\ngh release upload drilling-desktop-v1.0.4 Delivery_Verification.json\
+        CHECK\ngh release upload drilling-desktop-v1.0.5 Delivery_Verification.json\
         \ --clobber\n"
 env:
   PYTHONUTF8: '1'

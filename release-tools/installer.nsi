@@ -21,11 +21,11 @@ SetCompressorDictSize 32
 CRCCheck force
 ShowInstDetails show
 ShowUninstDetails show
-VIProductVersion "1.0.4.0"
+VIProductVersion "1.0.5.0"
 VIAddVersionKey /LANG=1028 "ProductName" "鑽探工作台 Windows 單機版"
 VIAddVersionKey /LANG=1028 "FileDescription" "鑽探工作台完整離線安裝程式"
-VIAddVersionKey /LANG=1028 "FileVersion" "1.0.4.0"
-VIAddVersionKey /LANG=1028 "ProductVersion" "1.0.4"
+VIAddVersionKey /LANG=1028 "FileVersion" "1.0.5.0"
+VIAddVersionKey /LANG=1028 "ProductVersion" "1.0.5"
 VIAddVersionKey /LANG=1028 "LegalCopyright" "鑽探工作台"
 !define MUI_ABORTWARNING
 !define MUI_WELCOMEPAGE_TITLE "鑽探工作台 Windows 單機版"
@@ -89,6 +89,7 @@ Section "鑽探工作台（完整離線版）"
  SetOverwrite on
  SetOutPath "$INSTDIR"
  File /oname=鑽探工作台.exe "${STAGE}\DrillingWorkbench.exe"
+ File /oname=鑽探工作台-網頁入口.exe "${STAGE}\DrillingWorkbench_Web_Start.exe"
  File "${STAGE}\drilling-workbench-blue.ico"
  File /oname=使用說明.txt "${STAGE}\README.zh-TW.txt"
  File "${STAGE}\THIRD-PARTY-NOTICES.txt"
@@ -119,9 +120,10 @@ Section "鑽探工作台（完整離線版）"
  CreateShortcut "$SMPROGRAMS\鑽探工作台\資料資料夾.lnk" "$INSTDIR\data"
  CreateShortcut "$SMPROGRAMS\鑽探工作台\解除安裝.lnk" "$INSTDIR\解除安裝.exe"
  CreateShortcut "$DESKTOP\鑽探工作台.lnk" "$INSTDIR\鑽探工作台.exe" "" "$INSTDIR\鑽探工作台.exe" 0 SW_SHOWNORMAL "" "鑽探工作台（離線單機版）"
+ CreateShortcut "$SMPROGRAMS\鑽探工作台\鑽探工作台（本機網頁入口）.lnk" "$INSTDIR\鑽探工作台-網頁入口.exe" "" "$INSTDIR\鑽探工作台-網頁入口.exe" 0
  WriteRegStr HKCU "Software\DrillingWorkbench" "InstallDir" "$INSTDIR"
  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\DrillingWorkbench" "DisplayName" "鑽探工作台 Windows 單機版"
- WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\DrillingWorkbench" "DisplayVersion" "1.0.4"
+ WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\DrillingWorkbench" "DisplayVersion" "1.0.5"
  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\DrillingWorkbench" "InstallLocation" "$INSTDIR"
  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\DrillingWorkbench" "DisplayIcon" '"$INSTDIR\鑽探工作台.exe",0' 
  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\DrillingWorkbench" "UninstallString" '"$INSTDIR\解除安裝.exe"'
@@ -145,6 +147,7 @@ Section "Uninstall"
  RMDir /r "$INSTDIR\runtime"
  RMDir /r "$INSTDIR\browser"
  Delete "$INSTDIR\鑽探工作台.exe"
+ Delete "$INSTDIR\鑽探工作台-網頁入口.exe"
  Delete "$INSTDIR\drilling-workbench-blue.ico"
  Delete "$INSTDIR\使用說明.txt"
  Delete "$INSTDIR\THIRD-PARTY-NOTICES.txt"
