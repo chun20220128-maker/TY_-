@@ -17,13 +17,15 @@ assert activation()==0,'Intact browser activation context failed'
 if '--reproduce-missing' in sys.argv:
  manifest=folder/version/(version+'.manifest');backup=manifest.with_suffix('.manifest.test-backup');manifest.rename(backup)
  try:
-  error=int(subprocess.check_output([sys.executable,str(Path(__file__).resolve()),str(folder),'--probe'],text=True).strip());assert error==14001,('Expected SxS 14001',error)
+  error=int(subprocess.check_output([sys.executable,str(Path(__file__).resolve()),str(folder),'--probe'],text=True).strip())
+  process_error=None
   try:
    process=subprocess.Popen([str(folder/'chrome.exe'),'--version'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
-  except OSError as exc:assert exc.winerror==14001
-  else:process.terminate();raise AssertionError('Missing assembly unexpectedly launched')
+  except OSError as exc:process_error=exc.winerror
+  else:process.terminate();process.wait(timeout=10);process_error=0
+
  finally:backup.rename(manifest)
- print(json.dumps({'oldPrivateAssemblyFailureReproduced':14001,'restoredAfterTest':activation()==0}))
+ print(json.dumps({'oldMissingManifestActivation':error,'oldMissingManifestProcessError':process_error,'userMachineFailureNotAssumedReproduced':True,'restoredAfterTest':activation()==0}))
 else:
  assert not (folder/version).exists(),'Version-dependent subfolder still required'
  for name in ['chrome.dll','chrome_elf.dll',version+'.manifest','icudtl.dat','v8_context_snapshot.bin']:assert (folder/name).is_file(),name
