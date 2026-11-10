@@ -100,6 +100,8 @@ Section "鑽探工作台（完整離線版）"
  File /r /x "__pycache__" "${STAGE}\app\*"
  SetOutPath "$INSTDIR\runtime"
  File /r /x "__pycache__" "${STAGE}\runtime\*"
+ ; Replace only packaged browser components; user data stays in data and exports.
+ RMDir /r "$INSTDIR\browser"
  SetOutPath "$INSTDIR\browser"
  File /r "${STAGE}\browser\*"
  CreateDirectory "$INSTDIR\exports"

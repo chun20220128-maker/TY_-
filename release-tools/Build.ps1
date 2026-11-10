@@ -14,6 +14,8 @@ if($LASTEXITCODE -ne 0){throw 'Old browser activation-context regression failed'
 $versionFolder=Join-Path $stage 'browser\157.0.8103.39'
 Get-ChildItem $versionFolder -Force|Move-Item -Destination "$stage\browser" -Force
 Remove-Item $versionFolder -Force
+$visual=Join-Path $stage 'browser\chrome.VisualElementsManifest.xml'
+if(Test-Path $visual){$xml=Get-Content $visual -Raw -Encoding utf8;[IO.File]::WriteAllText($visual,($xml -replace '157\.0\.8103\.39[\\/]',''),[Text.UTF8Encoding]::new($false))}
 python -X utf8 "$source\Check-Browser-Assembly.py" "$stage\browser" --flat
 if($LASTEXITCODE -ne 0){throw 'Flat browser activation-context validation failed'}
 Copy-Item "$repo\release-source\app\*" "$stage\app" -Recurse -Force
