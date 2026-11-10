@@ -1,0 +1,6 @@
+build/
+downloads/
+node_modules/
+__pycache__/
+*.pyc
+.private/

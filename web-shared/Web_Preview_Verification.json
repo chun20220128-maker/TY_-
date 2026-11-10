@@ -1,0 +1,15 @@
+{
+  "status": "deployable preview; not yet deployed to Cloudflare",
+  "backend": "Cloudflare Pages advanced worker + D1",
+  "deploymentIncludesRealHistoricalPrices": false,
+  "deploymentSeedRows": 0,
+  "managerImportsOwnCSVAfterProtectedDeployment": true,
+  "access": "32-byte random token; server SHA-256 verification; no default credential",
+  "activeProjectsStoredOnServer": false,
+  "unitTestsPassed": 5,
+  "testDataset": "322 synthetic rows across 14 test projects",
+  "browserTests": "two independent engineers, shared import, project isolation, backup/reload/restore, Word and Excel exports",
+  "sanitizedTemplates": 3,
+  "cloudflareLiveTested": false,
+  "zipSHA256": "8fbf9fe0f17961bd193b22f92e7320ac051869ef7a7b75d872231d1ca8c4ccbe"
+}
