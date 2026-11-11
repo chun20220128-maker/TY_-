@@ -1,0 +1,39 @@
+name: Recheck published 1.0.5 installer and Defender scan
+on:
+  push:
+    branches: [verify/desktop-1.0.5-scan]
+permissions:
+  contents: read
+jobs:
+  verify:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, windows-2025]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    steps:
+    - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+    - name: Download exact published installer and metadata
+      shell: pwsh
+      run: |
+        New-Item candidate,verification -ItemType Directory -Force|Out-Null
+        $base='https://github.com/chun20220128-maker/TY_-/releases/download/drilling-desktop-v1.0.5/'
+        foreach($name in @('DrillingWorkbench_Setup_1.0.5_x64.exe','DrillingWorkbench_Web_Start.exe','Build_Report.json')){Invoke-WebRequest ($base+$name) -OutFile ('candidate/'+$name)}
+        $hash=(Get-FileHash candidate/DrillingWorkbench_Setup_1.0.5_x64.exe -Algorithm SHA256).Hash.ToLower()
+        if($hash -ne '06d42d900ac3117303707e2f1b006777aeca9b869194a83af088ea749bed6cac'){throw 'Published binary changed'}
+    - name: Microsoft Defender scan of installer and extracted payload
+      shell: pwsh
+      run: ./release-tools/Defender-Scan.ps1
+    - name: Install browser verification tooling
+      shell: pwsh
+      run: npm install --prefix release-tools --no-audit --no-fund playwright@1.56.1
+    - name: Recheck offline installation and native application lifecycle
+      shell: pwsh
+      run: ./release-tools/Verify.ps1
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: always()
+      with:
+        name: recheck-${{ matrix.os }}
+        path: verification/*
+        retention-days: 30
