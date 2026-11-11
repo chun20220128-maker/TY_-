@@ -14,3 +14,14 @@ const conflict=document.createElement('dialog');conflict.id='sharedHistoryConfli
 window.showSharedHistoryConflict=()=>{if(!conflict.open)conflict.showModal()};$('cancelSharedReload').onclick=()=>conflict.close();$('reloadSharedHistory').onclick=async()=>{try{const response=await fetch('/api/history');if(!response.ok)throw Error('無法連線，請稍後再試');const remote=await response.json();state.history=remote.records;historyDatabase.revision=remote.revision;historyDatabase.baseline=new Map(remote.records.map(h=>[historyIdentity(h),historyKey(h)]));historyDatabase.ready=true;historyDatabase.error='';localStorage.setItem('geotech-history-outbox-v1','[]');render();renderHistory();save();conflict.close()}catch(error){$('sharedConflictStatus').textContent=error.message}};
 document.addEventListener('click',event=>{if(event.target.closest('#viewHistory')&&!historyDatabase.busy&&!historyDatabaseChanges().length){historyDatabase.error='';connectHistoryDatabase()}});
 $('saveStatus').textContent='專案暫存中；歷史單價連線後全公司共用';
+
+// Company web edition: reference library is read-only. Desktop source is unchanged.
+for(const id of ['importHistory','exportHistory','template','historyFile'])$(id)?.remove();
+for(const p of document.querySelectorAll('#estimate .sub'))if(p.textContent.includes('可持續匯入'))p.textContent='公司共用歷史契約單價，僅供查閱及建議單價參考。';
+for(const p of document.querySelectorAll('#historyDialog .sub'))for(const n of p.childNodes)if(n.nodeType===3)n.textContent=n.textContent.replace('匯出 CSV 使用目前篩選與排序結果。','');
+backupContents=function(){const data=structuredClone(state);data.history=[];return JSON.stringify({format:'geotech-backup',backupVersion:2,exportedAt:new Date().toISOString(),sections:['規劃','估價','契約','請款'],data},null,2)};
+// Disable file and programmatic import paths as well as the UI.
+queueHistoryDatabaseSave=function(){};
+flushHistoryDatabase=async function(){};
+
+const webLogout=document.createElement('button');webLogout.id='webLogout';webLogout.textContent='登出';document.querySelector('aside').appendChild(webLogout);webLogout.onclick=async()=>{if(webProjectDirty&&!confirm('尚未備份的專案將不保留。請先取消並匯出備份，或按確定登出。'))return;try{const response=await fetch('/api/logout',{method:'POST'});if(!response.ok)throw Error('登出失敗，請稍後重試。');webEnding=true;webProjectDirty=false;parent.location.reload()}catch(e){toast(e.message)}};
